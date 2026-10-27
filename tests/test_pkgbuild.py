@@ -129,3 +129,44 @@ def test_expand_substitutes_known_scalars_only():
     scalars = parse(SAMPLE).scalars
     assert expand("${pkgname}-$pkgver.tar", scalars) == "demo-1.2.3.tar"
     assert expand("${unknown}/${_commit}", scalars) == "${unknown}/abc123"
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["x=(a\\)\n", "x=a\\"],
+    ids=["array", "scalar"],
+)
+def test_a_dangling_escape_is_skipped_not_guessed(text: str):
+    assert parse(text).assignments == {}
+
+
+def test_an_empty_value_at_the_end_of_the_file_is_an_empty_string():
+    assert parse("x=").scalar("x") == ""
+
+
+def test_escaped_quotes_stay_inside_a_double_quoted_scalar():
+    assert parse('pkgdesc="say \\"hi\\""\n').scalar("pkgdesc") == 'say "hi"'
+
+
+def test_a_word_glued_to_its_closing_quote_is_not_treated_as_quoted():
+    found = parse('x="a"b\n').assignments["x"]
+    assert found.quote == ""
+
+
+def test_escaped_quotes_and_nested_parentheses_do_not_end_an_array():
+    assert parse('x=("a\\"b" (c) d)\n').array("x") == ['a"b', "(c)", "d"]
+
+
+def test_functions_with_quotes_comments_and_nested_braces_are_skipped_whole():
+    text = (
+        "build() {\n"
+        '  echo \'a } b\' "c \\" } d"  # } still a comment\n'
+        "  if true; then { :; } fi\n"
+        "}\n"
+        "pkgrel=3\n"
+    )
+    assert parse(text).scalar("pkgrel") == "3"
+
+
+def test_an_unterminated_function_swallows_the_rest_of_the_file():
+    assert parse("build() {\n  make\npkgrel=3\n").assignments == {}

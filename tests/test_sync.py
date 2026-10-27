@@ -151,3 +151,35 @@ def test_the_command_fails_cleanly(released: Path, monkeypatch, capsys):
     monkeypatch.chdir(released)
     assert main(["sync", "demo"]) == 1
     assert "multicz-aur:" in capsys.readouterr().err
+
+
+def test_a_previous_pkgrel_that_is_not_an_integer_is_reported(repo: Path):
+    commit(
+        repo,
+        "chore: init",
+        {**FILES, "packages/demo/PKGBUILD": PKGBUILD.replace("pkgrel=1", "pkgrel=1.5")},
+    )
+    git(repo, "tag", "demo-v0.1.0")
+    commit(
+        repo, "build(demo): flags", {"packages/demo/PKGBUILD": PKGBUILD.replace("make", "make -j1")}
+    )
+    with pytest.raises(SyncError, match="not an integer"):
+        sync_component(repo, CONFIG, "demo")
+
+
+def test_check_without_a_multicz_config_fails_cleanly(tmp_path: Path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    assert main(["check"]) == 1
+    assert "multicz-aur:" in capsys.readouterr().err
+
+
+def test_the_module_runs_as_a_command():
+    import runpy
+    import subprocess
+    import sys
+
+    runpy.run_module("multicz_aur.__main__", run_name="not_main")
+    out = subprocess.run(
+        [sys.executable, "-m", "multicz_aur", "--help"], capture_output=True, text=True, check=True
+    )
+    assert "multicz-aur" in out.stdout

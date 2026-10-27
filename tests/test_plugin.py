@@ -256,3 +256,30 @@ def test_every_finding_names_the_plugin(released: Path):
     findings = post_plan(released)[0] + validate(released)
     assert findings
     assert {v.plugin for v in findings} == {"aur"}
+
+
+def test_status_lines_skip_a_package_never_released(repo: Path):
+    commit(repo, "chore: init", FILES)
+    commit(repo, "feat(demo): first", {"packages/demo/new.txt": "x\n"})
+    config = make_config()
+    plan = build_plan(repo, config)
+    assert "demo" in plan.bumps
+    ctx = PluginContext(config=config, repo=repo, plan=plan, plugin_config={})
+    assert AurPlugin().status_lines(ctx) == []
+
+
+def test_a_previous_pkgrel_that_is_not_an_integer_is_reported_everywhere(repo: Path):
+    commit(
+        repo,
+        "chore: init",
+        {**FILES, "packages/demo/PKGBUILD": PKGBUILD.replace("pkgrel=1", "pkgrel=1.5")},
+    )
+    git(repo, "tag", "demo-v0.1.0")
+    commit(
+        repo, "build(demo): flags", {"packages/demo/PKGBUILD": PKGBUILD.replace("make", "make -j1")}
+    )
+    config = make_config()
+    plan = build_plan(repo, config)
+    ctx = PluginContext(config=config, repo=repo, plan=plan, plugin_config={})
+    assert any("not an integer" in m for m in messages(AurPlugin().post_plan(ctx), Severity.error))
+    assert AurPlugin().status_lines(ctx) == []
