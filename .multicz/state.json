@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "git_head": "669eb7a19c66a3fdee4f808b4fa59c2c8c859ddd",
+  "git_head_short": "669eb7a",
+  "timestamp": "2026-10-27T14:48:42Z",
+  "components": {
+    "multicz-aur-plugin": {
+      "version": "0.1.0",
+      "tag": "0.1.0",
+      "tag_sha": null
+    }
+  }
+}

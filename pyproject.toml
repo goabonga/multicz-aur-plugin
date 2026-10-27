@@ -3,7 +3,7 @@
 
 [project]
 name = "multicz-aur-plugin"
-version = "0.0.0"
+version = "0.1.0"
 description = "A multicz plugin that keeps AUR packages (PKGBUILD, .SRCINFO, pkgrel) honest."
 readme = "README.md"
 requires-python = ">=3.12"
