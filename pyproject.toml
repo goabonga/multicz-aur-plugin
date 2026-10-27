@@ -29,17 +29,78 @@ packages = ["src/multicz_aur"]
 
 [dependency-groups]
 dev = [
+    "mypy>=1.18",
+    "pre-commit>=4.0",
+    "pyright>=1.1.414",
     "pytest>=8.3",
-    "ruff>=0.8",
+    "pytest-cov>=6.0",
+    "ruff>=0.13",
 ]
 
 [tool.pytest.ini_options]
+minversion = "8.0"
+addopts = ["-ra", "--strict-config", "--strict-markers", "--import-mode=importlib"]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["src/multicz_aur"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 100
+exclude_lines = [
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+    "if __name__ == .__main__.:",
+]
 
 [tool.ruff]
 line-length = 100
 target-version = "py312"
 src = ["src", "tests"]
+extend-exclude = [".venv", "dist", "build"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+# E501 (line length) is enforced by the formatter, not the linter: fixtures,
+# message templates and the job-summary tables legitimately run past 100 columns.
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+warn_unreachable = true
+disallow_any_generics = true
+disallow_untyped_decorators = true
+no_implicit_reexport = true
+extra_checks = true
+exclude = ["build/", "dist/", ".venv/"]
+
+# multicz ships no py.typed marker, so its modules are untyped to mypy: what the
+# plugin imports from it is Any, including the BasePlugin it subclasses.
+[[tool.mypy.overrides]]
+module = "multicz.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "multicz_aur.plugin"
+disallow_subclassing_any = false
+
+[tool.pyright]
+include = ["src"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+
+# The only subprocess call is `git show <tag>:<path>` with a fixed argument list
+# and no shell (B404/B603), resolved through PATH so any git install works (B607).
+[tool.bandit]
+skips = ["B404", "B603", "B607"]
