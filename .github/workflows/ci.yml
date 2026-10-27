@@ -214,7 +214,7 @@ jobs:
           enable-cache: true
           cache-suffix: ${{ github.job }}
       - name: Run Bandit
-        run: uvx bandit --recursive src --format json --output bandit.json
+        run: uvx --from 'bandit[toml]' bandit -c pyproject.toml --recursive src --format json --output bandit.json
       - name: Summarize bandit
         if: ${{ !cancelled() }}
         run: python3 scripts/format_summary.py bandit bandit.json
