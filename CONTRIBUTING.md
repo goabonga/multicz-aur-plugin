@@ -103,6 +103,11 @@ version bumps and changelog computed by
 | `refactor`, `docs`, `test`, `chore`, `ci`, `build`, `style` | none | maintenance, no release |
 | `feat!` / `BREAKING CHANGE:` | major | incompatible change |
 
+The subject is at most 72 characters, has no trailing period and a
+lowercase first word after the colon: the signed merge refuses any other
+subject, so the `commit-subject` pre-commit hook and the `commit-subjects`
+CI job check it first.
+
 Examples:
 
 ```
