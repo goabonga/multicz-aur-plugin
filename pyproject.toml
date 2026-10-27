@@ -17,6 +17,9 @@ dependencies = [
 [project.scripts]
 multicz-aur = "multicz_aur.cli:main"
 
+[project.entry-points."multicz.plugins"]
+aur = "multicz_aur:AurPlugin"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
