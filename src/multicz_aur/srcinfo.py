@@ -11,6 +11,7 @@ be rewritten in place without running makepkg, which only exists on Arch.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 
 from .pkgbuild import Pkgbuild
 
@@ -19,6 +20,13 @@ _FIELDS = ("pkgver", "pkgrel")
 
 def _line(field: str) -> re.Pattern[str]:
     return re.compile(rf"^(?P<head>[ \t]*{field} = )(?P<value>.*?)[ \t]*$", re.MULTILINE)
+
+
+def _replacement(value: str) -> Callable[[re.Match[str]], str]:
+    def replace(match: re.Match[str]) -> str:
+        return match.group("head") + value
+
+    return replace
 
 
 def read(text: str) -> dict[str, str]:
@@ -37,7 +45,7 @@ def sync(text: str, pkgver: str, pkgrel: str) -> str:
         pattern = _line(field)
         if not pattern.search(text):
             raise KeyError(field)
-        text = pattern.sub(lambda m, v=value: m.group("head") + v, text, count=1)
+        text = pattern.sub(_replacement(value), text, count=1)
     return text
 
 

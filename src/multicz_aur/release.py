@@ -43,8 +43,9 @@ def aur_components(repo: Path, config: Config) -> dict[str, Path]:
 
 
 def last_tag(repo: Path, config: Config, component: str) -> str | None:
-    prefix = tag_prefix(config.tag_format_for(component), component)
-    return latest_stable_tag(repo, prefix)
+    prefix: str = tag_prefix(config.tag_format_for(component), component)
+    tag: str | None = latest_stable_tag(repo, prefix)
+    return tag
 
 
 def read_at(repo: Path, ref: str, path: Path) -> str | None:
