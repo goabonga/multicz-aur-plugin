@@ -1,0 +1,59 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Chris <goabonga@pm.me>
+
+# multicz.toml - versioning, changelog and tagging for the single
+# multicz-aur-plugin component. Driven by Conventional Commits.
+# Docs: https://goabonga.github.io/multicz/
+
+[project]
+commit_convention = "conventional"
+tag_format = "{version}"
+initial_version = "0.0.0"
+# Regenerate uv.lock after each bump so the lockfile tracks the new
+# version. Without `allow`, multicz silently skips the hook and the
+# next `uv sync --frozen` in CI fails on lockfile drift.
+post_bump_policy = "allow"
+state_file = ".multicz/state.json"
+
+[project.bump_rules]
+feat = "minor"
+fix = "patch"
+perf = "patch"
+revert = "patch"
+
+# CHANGELOG layout aligned on Keep-a-Changelog. multicz routes each
+# commit to the section whose `types` list contains its type. Order
+# matters: sections render in declaration order.
+[[project.changelog_sections]]
+title = "Added"
+types = ["feat"]
+
+[[project.changelog_sections]]
+title = "Fixed"
+types = ["fix"]
+
+[[project.changelog_sections]]
+title = "Performance"
+types = ["perf"]
+
+[[project.changelog_sections]]
+title = "Reverted"
+types = ["revert"]
+
+[components.multicz-aur-plugin]
+# A commit is attributed to this component (for the bump and the
+# CHANGELOG) only if it touches one of these paths - the source, the
+# project/metadata file and its lock (a runtime dependency bump only
+# touches uv.lock). Everything else (LICENSE, README, .github, tests,
+# scripts, tooling configs) is intentionally NOT tracked, so infra or
+# docs-only work never counts as a release.
+paths = ["src/**", "pyproject.toml", "uv.lock"]
+bump_files = [
+    { file = "pyproject.toml", key = "project.version" },
+]
+changelog = "CHANGELOG.md"
+post_bump = ["uv lock"]
+
+[[components.multicz-aur-plugin.artifacts]]
+type = "pypi"
+ref = "multicz-aur-plugin=={version}"
