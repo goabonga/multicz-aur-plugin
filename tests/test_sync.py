@@ -174,11 +174,12 @@ def test_check_without_a_multicz_config_fails_cleanly(tmp_path: Path, monkeypatc
 
 
 def test_the_module_runs_as_a_command():
-    import runpy
+    import importlib
     import subprocess
     import sys
 
-    runpy.run_module("multicz_aur.__main__", run_name="not_main")
+    sys.modules.pop("multicz_aur.__main__", None)
+    importlib.import_module("multicz_aur.__main__")
     out = subprocess.run(
         [sys.executable, "-m", "multicz_aur", "--help"], capture_output=True, text=True, check=True
     )
