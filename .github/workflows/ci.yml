@@ -1,0 +1,247 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Chris <goabonga@pm.me>
+
+name: ci
+
+on:
+  pull_request:
+    # An issue branch collects the pull requests of its sub-issues before it
+    # reaches main, so they are checked like the ones into main.
+    branches: [main, "issue-*"]
+  push:
+    branches: [main]
+
+# The quality jobs skip the `chore(release)` commit multicz pushes to main:
+# the run that cut the release already validated the code it carries, and
+# `release` and its publish jobs need them, so they are skipped with them.
+
+# `concurrency` cancels superseded PR runs but never main-branch releases.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # An explicit shell enables pipefail, so `| tee` keeps the tool's status.
+    shell: bash
+
+jobs:
+  # Lint with ruff: `ruff check` (E, F, I, B, UP, SIM) plus a separate
+  # `ruff format --check` so whitespace/quote-style violations are caught
+  # for contributors who skipped the pre-commit hooks.
+  lint:
+    name: lint
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore(release)')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-suffix: ${{ github.job }}
+      - name: Sync
+        run: uv sync --frozen
+      - name: Lint
+        run: uv run ruff check --output-format=json --output-file=ruff.json src tests
+      - name: Summarize ruff check
+        if: ${{ !cancelled() }}
+        run: python3 scripts/format_summary.py ruff-check ruff.json
+      - name: Format check
+        if: ${{ !cancelled() }}
+        run: uv run ruff format --check src tests 2>&1 | tee ruff-format.txt
+      - name: Summarize ruff format
+        if: ${{ !cancelled() }}
+        run: python3 scripts/format_summary.py ruff-format ruff-format.txt
+
+  # Strict static type checking with mypy on the public src/.
+  type-check:
+    name: type-check
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore(release)')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-suffix: ${{ github.job }}
+      - name: Sync
+        run: uv sync --frozen
+      - name: Type-check
+        run: uv run mypy src 2>&1 | tee mypy.txt
+      - name: Summarize mypy
+        if: ${{ !cancelled() }}
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: python3 scripts/format_summary.py text mypy mypy.txt
+
+  # Second static type check, with pyright, on the public src/. mypy and
+  # pyright disagree on inference and narrowing, so each catches what the
+  # other lets through.
+  pyright:
+    name: pyright
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore(release)')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-suffix: ${{ github.job }}
+      - name: Sync
+        run: uv sync --frozen
+      - name: Type-check
+        run: uv run --no-sync pyright --outputjson > pyright.json
+      - name: Summarize pyright
+        if: ${{ !cancelled() }}
+        run: python3 scripts/format_summary.py pyright pyright.json
+
+  # Verify the two-line SPDX header on every Python source and config.
+  license-headers:
+    name: license-headers
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore(release)')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check SPDX headers
+        run: |
+          {
+            python3 scripts/add_license_header.py --path src --types py --check
+            python3 scripts/add_license_header.py --path tests --types py --check
+            python3 scripts/add_license_header.py --path scripts --types py --check
+            python3 scripts/add_license_header.py --path .github --types yml --check
+            python3 scripts/add_license_header.py --path . --types toml --check
+          } 2>&1 | tee headers.txt
+      - name: Summarize license headers
+        if: ${{ !cancelled() }}
+        run: python3 scripts/format_summary.py headers headers.txt
+
+  # `multicz validate` reads multicz.toml and checks it against the repository
+  # and the installed plugins, this project's own among them.
+  validate:
+    name: validate
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore(release)')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-suffix: ${{ github.job }}
+      - name: Sync
+        run: uv sync --frozen
+      - name: Validate the multicz configuration
+        run: uv run multicz validate --strict
+
+  # Run the test suite with coverage and report to Codecov.
+  test:
+    name: test (${{ matrix.python }})
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore(release)')
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-suffix: ${{ github.job }}-${{ matrix.python }}
+          python-version: ${{ matrix.python }}
+      - name: Sync
+        run: uv sync --frozen
+      - name: Run tests with coverage
+        run: |
+          uv run pytest \
+            --cov=multicz_aur \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml \
+            --junitxml=junit.xml \
+            -o junit_family=legacy
+      - name: Summarize tests and coverage
+        if: ${{ !cancelled() }}
+        run: python3 scripts/format_summary.py pytest --junit junit.xml --coverage coverage.xml
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+          disable_search: true
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v7
+        with:
+          files: junit.xml
+          report_type: test_results
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false
+          disable_search: true
+
+  # Static security analysis of the source (Bandit).
+  bandit:
+    name: bandit
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore(release)')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-suffix: ${{ github.job }}
+      - name: Run Bandit
+        run: uvx bandit --recursive src --format json --output bandit.json
+      - name: Summarize bandit
+        if: ${{ !cancelled() }}
+        run: python3 scripts/format_summary.py bandit bandit.json
+
+  # Audit the locked dependency graph against the PyPI advisory DB.
+  pip-audit:
+    name: pip-audit
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore(release)')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-suffix: ${{ github.job }}
+      - name: Export locked requirements
+        # `pip-audit --path .venv` finds no package in a uv venv and
+        # audits nothing, so audit the pinned lock export instead.
+        run: uv export --frozen --all-groups --no-emit-project --no-hashes --output-file requirements.txt
+      - name: Run pip-audit
+        run: uvx pip-audit -r requirements.txt --no-deps --disable-pip --format json --output audit.json
+      - name: Summarize pip-audit
+        if: ${{ !cancelled() }}
+        run: python3 scripts/format_summary.py pip-audit audit.json
+
+  # Multi-source vulnerability scan via OSV-Scanner (reads uv.lock).
+  osv-scanner:
+    name: osv-scanner
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'chore(release)')
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install OSV-Scanner
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSfL \
+            "https://github.com/google/osv-scanner/releases/latest/download/osv-scanner_linux_amd64" \
+            -o "$HOME/.local/bin/osv-scanner"
+          chmod +x "$HOME/.local/bin/osv-scanner"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Run OSV-Scanner
+        run: osv-scanner scan source --lockfile=uv.lock 2>&1 | tee osv-scanner.txt
+      - name: Summarize osv-scanner
+        if: ${{ !cancelled() }}
+        env:
+          JOB_STATUS: ${{ job.status }}
+        run: python3 scripts/format_summary.py text osv-scanner osv-scanner.txt
