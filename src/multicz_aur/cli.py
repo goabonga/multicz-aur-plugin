@@ -11,7 +11,9 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from multicz.config import find_config, load_config
+from multicz.plugins.protocol import Severity
 
+from .plugin import check
 from .sync import SyncError, sync_component
 
 
@@ -24,7 +26,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     sync.add_argument("component", help="the multicz component, which is the package name")
     sync.add_argument("--dry-run", action="store_true", help="report without writing")
+    commands.add_parser(
+        "check",
+        help="run the plugin's checks and fail on any error (for a pull request gate)",
+    )
     args = parser.parse_args(argv)
+
+    if args.command == "check":
+        return _check()
 
     try:
         config_path = find_config(Path.cwd())
@@ -42,3 +51,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         file=sys.stderr,
     )
     return 0
+
+
+def _check() -> int:
+    try:
+        config_path = find_config(Path.cwd())
+        violations = check(config_path.parent, load_config(config_path))
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"multicz-aur: {exc}", file=sys.stderr)
+        return 1
+    for v in violations:
+        where = f" ({v.file})" if v.file else ""
+        print(f"{v.severity.value}: {v.component or '-'}: {v.message}{where}")
+    errors = sum(v.severity is Severity.error for v in violations)
+    print(f"{len(violations)} finding(s), {errors} error(s)", file=sys.stderr)
+    return 1 if errors else 0

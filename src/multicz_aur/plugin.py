@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from multicz.config import Config
+from multicz.planner import build_plan
 from multicz.plugins.protocol import (
     BasePlugin,
     OwnershipContext,
@@ -174,6 +176,20 @@ class AurPlugin(BasePlugin):
                     f"pkgrel is {actual} in the file; `{HOOK}` will set {expected} on release",
                 )
         return found
+
+
+def check(repo: Path, config: Config) -> list[Violation]:
+    """Every finding of the plugin, for a gate that must fail outside of ``bump``.
+
+    multicz prints the ``post_plan`` findings in ``plan`` without ever failing, and
+    ``bump`` stops before the plugins when nothing is due for release: exactly the
+    case of an edit typed ``chore``. This runs both hooks and lets the caller exit.
+    """
+    plugin = AurPlugin()
+    found = plugin.validate(OwnershipContext(config=config, repo=repo, plugin_config={}))
+    plan = build_plan(repo, config)
+    found += plugin.post_plan(PluginContext(config=config, repo=repo, plan=plan, plugin_config={}))
+    return found
 
 
 def _skipped_checksums(pkgbuild: Pkgbuild) -> list[str]:
