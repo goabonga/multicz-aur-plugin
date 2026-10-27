@@ -1,0 +1,63 @@
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Chris <goabonga@pm.me>
+
+name: Bug Report
+description: Report a bug or unexpected behavior
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill in the details below.
+
+  - type: input
+    id: version
+    attributes:
+      label: multicz-aur-plugin version
+      description: "Output of `pip show multicz-aur-plugin`."
+    validations:
+      required: true
+
+  - type: input
+    id: multicz
+    attributes:
+      label: multicz version
+      description: "Output of `multicz --version`."
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear description of the bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: The command you ran, the relevant `multicz.toml` and the PKGBUILD lines involved.
+      placeholder: |
+        1. Run `multicz-aur check`
+        2. ...
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened? Include the output.
+    validations:
+      required: true
